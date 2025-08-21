@@ -12,12 +12,12 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 // Define GPIO pins (ESP32-C3 safe mapping)
-const int fanrelay = 6;            // Relay / Fan control
-const int lightsensor = 2;         // LDR (analog input, ADC1_CH2)
-const int nightled = 7;            // PWM brightness control (LDR LED)
-const int mainledsw = 0;           // Touch sensor
-const int proximitysw = 3;         // Proximity sensor
-const int mainled = 1;             // Main LED PWM control
+const int fanrelay = 6;         // Relay / Fan control
+const int lightsensor = 2;      // LDR (analog input, ADC1_CH2)
+const int nightled = 7;         // PWM brightness control (LDR LED)
+const int mainledsw = 0;        // Touch sensor
+const int proximitysw = 3;      // Proximity sensor
+const int mainled = 1;          // Main LED PWM control
 
 // Variables for sensor states and control
 int currentTouchValue = 0;
@@ -446,7 +446,8 @@ void loop() {
     if (currentMode == MANUAL_ON_TIMED && currentMillis >= manualTimerEnd) {
       currentMode = AUTOMATED;
       digitalWrite(fanrelay, LOW);
-      sendEventLogToPi("Timed fan control ended. Fan is now OFF. Automated control resumed.");
+      // Removed the logging call to prevent watchdog timer resets.
+      // sendEventLogToPi("Timed fan control ended. Fan is now OFF. Automated control resumed.");
     }
     
     if (currentMode == AUTOMATED) {
