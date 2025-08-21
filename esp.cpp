@@ -6,7 +6,6 @@
 #include "driver/ledc.h"
 #include "HTTPClient.h"
 
-// Define the sensor type and the GPIO pin it's connected to.
 #define DHTPIN 4
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
@@ -19,40 +18,32 @@ const int mainledsw = 0;        // Touch sensor
 const int proximitysw = 3;      // Proximity sensor
 const int mainled = 1;          // Main LED PWM control
 
-// Variables for sensor states and control
 int currentTouchValue = 0;
 int lastTouchValue = 0;
 int currentProximityValue = 0;
 int lastProximityValue = 0;
 
-// Thresholds
 int lightThreshold = 2350;
 
-// PWM settings for LEDC using ESP-IDF functions
 const ledc_mode_t ledcMode = LEDC_LOW_SPEED_MODE;
 const ledc_timer_bit_t ledcResolution = LEDC_TIMER_8_BIT;
 
-// LDR LED PWM settings
 const ledc_timer_t ledcTimer_ldr = LEDC_TIMER_0;
 const ledc_channel_t ledcChannel_ldr = LEDC_CHANNEL_0;
 int ledcBaseFreq = 5000;
 int currentBrightnessDutyCycle = 128; // Default 50% brightness for LDR LED
 
-// Main LED PWM settings
 const ledc_timer_t ledcTimer_mainLed = LEDC_TIMER_1;
 const ledc_channel_t ledcChannel_mainLed = LEDC_CHANNEL_1;
 int mainLedBaseFreq = 5000;
 int mainLedBrightnessDutyCycle = 255; // Main LED full brightness
 
-// Calibration offsets
 const float tempOffset = -0.1;
 const float humidityOffset = 6.0;
 
-// Temperature thresholds
 float tempOn = 29.0;
 float tempOff = 28.5;
 
-// WiFi Configuration
 const char* ssid = "wifi_slow";
 IPAddress staticIP(192, 168, 1, 4);
 IPAddress gateway(192, 168, 1, 1);
@@ -61,7 +52,6 @@ IPAddress subnet(255, 255, 255, 0);
 WebServer server(80);
 Preferences preferences;
 
-// Timers and State variables
 unsigned long previousSensorMillis = 0;
 const long sensorInterval = 10000; // Sensor read interval (10 seconds)
 unsigned long lastLDRChangeTime = 0;
@@ -76,19 +66,16 @@ bool proximityManualState = false; // This variable controls the master switch s
 bool lastFanState = false;
 int lastNightLedDuty = 0;
 
-// Define the control modes and current mode variable
 enum ControlMode { AUTOMATED, MANUAL_ON_PERMANENT, MANUAL_ON_TIMED };
 ControlMode currentMode = AUTOMATED;
 unsigned long manualTimerEnd = 0;
 
-// === Sensor Reading Function ===
 void readSensors() {
   lastHumidity = dht.readHumidity() + humidityOffset;
   lastTemperature = dht.readTemperature() + tempOffset;
   lastLight = analogRead(lightsensor);
 }
 
-// === Logging Function to send a descriptive event to Orange Pi ===
 void sendEventLogToPi(String event_message) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
@@ -112,12 +99,11 @@ void sendEventLogToPi(String event_message) {
   }
 }
 
-// === Web Handlers ===
-
 /**
  * @brief Sets the fan relay to a permanent ON state.
  */
 void handleOn() {
+  sendEventLogToPi("Web request received on path: /on-perm");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_PERMANENT;
   digitalWrite(fanrelay, HIGH);
@@ -129,6 +115,7 @@ void handleOn() {
  * @brief Sets the fan relay to OFF and resumes automated control.
  */
 void handleOff() {
+  sendEventLogToPi("Web request received on path: /off");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = AUTOMATED;
   digitalWrite(fanrelay, LOW);
@@ -140,6 +127,7 @@ void handleOff() {
  * @brief Sets the fan relay ON for 1 hour.
  */
 void handleOn1h() {
+  sendEventLogToPi("Web request received on path: /on-1h");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_TIMED;
   digitalWrite(fanrelay, HIGH);
@@ -152,6 +140,7 @@ void handleOn1h() {
  * @brief Sets the fan relay ON for 2 hours.
  */
 void handleOn2h() {
+  sendEventLogToPi("Web request received on path: /on-2h");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_TIMED;
   digitalWrite(fanrelay, HIGH);
@@ -164,6 +153,7 @@ void handleOn2h() {
  * @brief Sets the temperature ON threshold.
  */
 void handleSetTempOn() {
+  sendEventLogToPi("Web request received on path: /set-temp-on");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     tempOn = server.arg("value").toFloat();
@@ -179,6 +169,7 @@ void handleSetTempOn() {
  * @brief Sets the temperature OFF threshold.
  */
 void handleSetTempOff() {
+  sendEventLogToPi("Web request received on path: /set-temp-off");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     tempOff = server.arg("value").toFloat();
@@ -194,6 +185,7 @@ void handleSetTempOff() {
  * @brief Sets the night LED brightness.
  */
 void handleSetBrightness() {
+  sendEventLogToPi("Web request received on path: /set-brightness");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     currentBrightnessDutyCycle = server.arg("value").toInt();
@@ -214,6 +206,7 @@ void handleSetBrightness() {
  * @brief Sets the light sensor threshold.
  */
 void handleSetLightThreshold() {
+  sendEventLogToPi("Web request received on path: /set-light-threshold");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     lightThreshold = server.arg("value").toInt();
@@ -229,11 +222,12 @@ void handleSetLightThreshold() {
  * @brief Sets the main LED brightness.
  */
 void handleSetMainLedBrightness() {
+  sendEventLogToPi("Web request received on path: /set-main-led-brightness");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     mainLedBrightnessDutyCycle = server.arg("value").toInt();
     if (mainLedBrightnessDutyCycle > 255) mainLedBrightnessDutyCycle = 255;
-    if (mainLedBrightnessDutyCycle < 0) mainLedBrightnessDutyCycle = 0;
+    if (mainLedBrightnessDutyCycle < 0) currentBrightnessDutyCycle = 0;
     preferences.putUInt("mainLedBrightness", mainLedBrightnessDutyCycle);
 
     sendEventLogToPi("Main LED brightness set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%.");
@@ -247,6 +241,7 @@ void handleSetMainLedBrightness() {
  * @brief Toggles the main LED state and saves it.
  */
 void handleToggleMainLed() {
+  sendEventLogToPi("Web request received on path: /toggle-main-led");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (proximityManualState) {
     mainLedManualState = !mainLedManualState;
@@ -262,6 +257,7 @@ void handleToggleMainLed() {
  * @brief Toggles the master switch state and saves it.
  */
 void handleToggleMasterSwitch() {
+  sendEventLogToPi("Web request received on path: /toggle-master-switch");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   proximityManualState = !proximityManualState;
   preferences.putBool("proximityManualState", proximityManualState);
@@ -296,7 +292,13 @@ void handleData() {
   server.send(200, "application/json", response);
 }
 
-// === Setup ===
+void handleNotFound() {
+  String message = "Web request received on path: ";
+  message += server.uri();
+  sendEventLogToPi(message);
+  server.send(404, "text/plain", "Not Found");
+}
+
 void setup() {
   setCpuFrequencyMhz(80);
   Serial.begin(9600);
@@ -318,7 +320,6 @@ void setup() {
   pinMode(proximitysw, INPUT);
   pinMode(mainled, OUTPUT);
 
-  // Configure PWM timer for LDR LED
   ledc_timer_config_t ledcTimerConfig_ldr = {
     .speed_mode = ledcMode,
     .duty_resolution = ledcResolution,
@@ -328,7 +329,6 @@ void setup() {
   };
   ledc_timer_config(&ledcTimerConfig_ldr);
 
-  // Configure PWM timer for main LED
   ledc_timer_config_t ledcTimerConfig_mainLed = {
     .speed_mode = ledcMode,
     .duty_resolution = ledcResolution,
@@ -338,7 +338,6 @@ void setup() {
   };
   ledc_timer_config(&ledcTimerConfig_mainLed);
 
-  // Configure PWM channel for LDR LED
   ledc_channel_config_t ledcChannelConfig_ldr = {
     .gpio_num = nightled,
     .speed_mode = ledcMode,
@@ -350,7 +349,6 @@ void setup() {
   };
   ledc_channel_config(&ledcChannelConfig_ldr);
 
-  // Configure PWM channel for main LED
   ledc_channel_config_t ledcChannelConfig_mainLed = {
     .gpio_num = mainled,
     .speed_mode = ledcMode,
@@ -362,7 +360,6 @@ void setup() {
   };
   ledc_channel_config(&ledcChannelConfig_mainLed);
 
-  // Set initial duty cycle for LDR light
   ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
   ledc_update_duty(ledcMode, ledcChannel_ldr);
 
@@ -371,6 +368,7 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
+  sendEventLogToPi("WiFi connected successfully. IP address: " + WiFi.localIP().toString());
 
   server.on("/on-perm", handleOn);
   server.on("/off", handleOff);
@@ -384,6 +382,7 @@ void setup() {
   server.on("/toggle-main-led", handleToggleMainLed);
   server.on("/toggle-master-switch", handleToggleMasterSwitch);
   server.on("/data", handleData);
+  server.onNotFound(handleNotFound);
   server.begin();
 
   readSensors();
@@ -396,13 +395,12 @@ void setup() {
     ledc_update_duty(ledcMode, ledcChannel_ldr);
   }
 
-  // Set initial state tracking variables for activity-based logging
   lastFanState = digitalRead(fanrelay);
   lastNightLedDuty = ledc_get_duty(ledcMode, ledcChannel_ldr);
   sendEventLogToPi("System started. Initial fan state: " + String(lastFanState ? "ON" : "OFF") + ", initial main LED state: " + String(mainLedManualState ? "ON" : "OFF") + ".");
+  sendEventLogToPi("Initial master switch state: " + String(proximityManualState ? "ON" : "OFF"));
 }
 
-// === Loop ===
 void loop() {
   server.handleClient();
   unsigned long currentMillis = millis();
@@ -446,8 +444,7 @@ void loop() {
     if (currentMode == MANUAL_ON_TIMED && currentMillis >= manualTimerEnd) {
       currentMode = AUTOMATED;
       digitalWrite(fanrelay, LOW);
-      // Removed the logging call to prevent watchdog timer resets.
-      // sendEventLogToPi("Timed fan control ended. Fan is now OFF. Automated control resumed.");
+      sendEventLogToPi("Timed fan control ended. Fan is now OFF. Automated control resumed.");
     }
     
     if (currentMode == AUTOMATED) {
@@ -464,7 +461,7 @@ void loop() {
     ledc_update_duty(ledcMode, ledcChannel_mainLed);
   }
 
-  // === LDR and Brightness Control Logic ===
+  // LDR and Brightness Control Logic
   int currentLight = analogRead(lightsensor);
   bool currentLDRState = currentLight < lightThreshold;
 
