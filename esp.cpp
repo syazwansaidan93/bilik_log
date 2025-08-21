@@ -55,7 +55,7 @@ Preferences preferences;
 unsigned long previousSensorMillis = 0;
 const long sensorInterval = 10000; // Sensor read interval (10 seconds)
 unsigned long lastLDRChangeTime = 0;
-const long debounceDelay = 50; // Reduced to make the night LED react faster
+long debounceDelay = 50; // Reduced to make the night LED react faster
 
 float lastHumidity = 0;
 float lastTemperature = 0;
@@ -103,11 +103,10 @@ void sendEventLogToPi(String event_message) {
  * @brief Sets the fan relay to a permanent ON state.
  */
 void handleOn() {
-  sendEventLogToPi("Web request received on path: /on-perm");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_PERMANENT;
   digitalWrite(fanrelay, HIGH);
-  sendEventLogToPi("Fan manually turned ON (permanent).");
+  sendEventLogToPi("Fan is now manually ON (permanent).");
   server.send(200, "text/plain", "GPIO 6 is now manually ON (permanent).");
 }
 
@@ -115,11 +114,10 @@ void handleOn() {
  * @brief Sets the fan relay to OFF and resumes automated control.
  */
 void handleOff() {
-  sendEventLogToPi("Web request received on path: /off");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = AUTOMATED;
   digitalWrite(fanrelay, LOW);
-  sendEventLogToPi("Fan manually turned OFF. Automated control resumed.");
+  sendEventLogToPi("Fan is now manually OFF. Automated control resumed.");
   server.send(200, "text/plain", "GPIO 6 is now OFF. Automated control resumed.");
 }
 
@@ -127,33 +125,30 @@ void handleOff() {
  * @brief Sets the fan relay ON for 1 hour.
  */
 void handleOn1h() {
-  sendEventLogToPi("Web request received on path: /on-1h");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_TIMED;
   digitalWrite(fanrelay, HIGH);
   manualTimerEnd = millis() + 3600000;
-  sendEventLogToPi("Fan manually turned ON for 1 hour.");
+  sendEventLogToPi("Fan is now manually ON for 1 hour.");
   server.send(200, "text/plain", "GPIO 6 is now manually ON for 1 hour.");
 }
 
 /**
- * @brief Sets the fan relay ON for 2 hours.
+ * @brief Sets the fan relay ON for 30 minutes.
  */
-void handleOn2h() {
-  sendEventLogToPi("Web request received on path: /on-2h");
+void handleOn30m() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   currentMode = MANUAL_ON_TIMED;
   digitalWrite(fanrelay, HIGH);
-  manualTimerEnd = millis() + 7200000;
-  sendEventLogToPi("Fan manually turned ON for 2 hours.");
-  server.send(200, "text/plain", "GPIO 6 is now manually ON for 2 hours.");
+  manualTimerEnd = millis() + 1800000;
+  sendEventLogToPi("Fan is now manually ON for 30 minutes.");
+  server.send(200, "text/plain", "GPIO 6 is now manually ON for 30 minutes.");
 }
 
 /**
  * @brief Sets the temperature ON threshold.
  */
 void handleSetTempOn() {
-  sendEventLogToPi("Web request received on path: /set-temp-on");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     tempOn = server.arg("value").toFloat();
@@ -169,7 +164,6 @@ void handleSetTempOn() {
  * @brief Sets the temperature OFF threshold.
  */
 void handleSetTempOff() {
-  sendEventLogToPi("Web request received on path: /set-temp-off");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     tempOff = server.arg("value").toFloat();
@@ -185,7 +179,6 @@ void handleSetTempOff() {
  * @brief Sets the night LED brightness.
  */
 void handleSetBrightness() {
-  sendEventLogToPi("Web request received on path: /set-brightness");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     currentBrightnessDutyCycle = server.arg("value").toInt();
@@ -195,7 +188,7 @@ void handleSetBrightness() {
 
     ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
     ledc_update_duty(ledcMode, ledcChannel_ldr);
-    sendEventLogToPi("Night LED brightness set to " + String((int)(currentBrightnessDutyCycle / 2.55)) + "%.");
+    sendEventLogToPi("Night LED brightness level set to " + String((int)(currentBrightnessDutyCycle / 2.55)) + "%.");
     server.send(200, "text/plain", "LED brightness level set to " + String((int)(currentBrightnessDutyCycle / 2.55)) + "%..");
   } else {
     server.send(400, "text/plain", "Missing 'value' parameter.");
@@ -206,7 +199,6 @@ void handleSetBrightness() {
  * @brief Sets the light sensor threshold.
  */
 void handleSetLightThreshold() {
-  sendEventLogToPi("Web request received on path: /set-light-threshold");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     lightThreshold = server.arg("value").toInt();
@@ -222,16 +214,29 @@ void handleSetLightThreshold() {
  * @brief Sets the main LED brightness.
  */
 void handleSetMainLedBrightness() {
-  sendEventLogToPi("Web request received on path: /set-main-led-brightness");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
     mainLedBrightnessDutyCycle = server.arg("value").toInt();
     if (mainLedBrightnessDutyCycle > 255) mainLedBrightnessDutyCycle = 255;
     if (mainLedBrightnessDutyCycle < 0) currentBrightnessDutyCycle = 0;
     preferences.putUInt("mainLedBrightness", mainLedBrightnessDutyCycle);
-
-    sendEventLogToPi("Main LED brightness set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%.");
+    sendEventLogToPi("Main LED brightness level set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%.");
     server.send(200, "text/plain", "Main LED brightness level set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%..");
+  } else {
+    server.send(400, "text/plain", "Missing 'value' parameter.");
+  }
+}
+
+/**
+ * @brief Sets the debounce delay for the night LED.
+ */
+void handleSetDebounceDelay() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  if (server.hasArg("value")) {
+    debounceDelay = server.arg("value").toInt();
+    preferences.putUInt("debounceDelay", debounceDelay);
+    sendEventLogToPi("Night LED debounce delay set to " + String(debounceDelay) + "ms.");
+    server.send(200, "text/plain", "Night LED debounce delay set to " + String(debounceDelay) + "ms.");
   } else {
     server.send(400, "text/plain", "Missing 'value' parameter.");
   }
@@ -241,12 +246,11 @@ void handleSetMainLedBrightness() {
  * @brief Toggles the main LED state and saves it.
  */
 void handleToggleMainLed() {
-  sendEventLogToPi("Web request received on path: /toggle-main-led");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (proximityManualState) {
     mainLedManualState = !mainLedManualState;
     preferences.putBool("mainLedManualState", mainLedManualState);
-    sendEventLogToPi("Main LED state toggled to " + String(mainLedManualState ? "ON" : "OFF") + " via web command.");
+    sendEventLogToPi("Main LED state toggled to " + String(mainLedManualState ? "ON" : "OFF") + ".");
     server.send(200, "text/plain", "Main LED state toggled to " + String(mainLedManualState ? "ON" : "OFF") + ".");
   } else {
     server.send(200, "text/plain", "Master switch is OFF. Cannot toggle main LED.");
@@ -257,11 +261,10 @@ void handleToggleMainLed() {
  * @brief Toggles the master switch state and saves it.
  */
 void handleToggleMasterSwitch() {
-  sendEventLogToPi("Web request received on path: /toggle-master-switch");
   server.sendHeader("Access-Control-Allow-Origin", "*");
   proximityManualState = !proximityManualState;
   preferences.putBool("proximityManualState", proximityManualState);
-  sendEventLogToPi("Master switch toggled to " + String(proximityManualState ? "ON" : "OFF") + " via web command.");
+  sendEventLogToPi("Master switch state toggled to " + String(proximityManualState ? "ON" : "OFF") + ".");
   server.send(200, "text/plain", "Master switch state toggled to " + String(proximityManualState ? "ON" : "OFF") + ".");
 }
 
@@ -286,6 +289,7 @@ void handleData() {
   jsonDoc["temp_on_threshold"] = tempOn;
   jsonDoc["temp_off_threshold"] = tempOff;
   jsonDoc["light_threshold"] = lightThreshold;
+  jsonDoc["debounce_delay_ms"] = debounceDelay;
 
   String response;
   serializeJson(jsonDoc, response);
@@ -293,15 +297,13 @@ void handleData() {
 }
 
 void handleNotFound() {
-  String message = "Web request received on path: ";
-  message += server.uri();
-  sendEventLogToPi(message);
   server.send(404, "text/plain", "Not Found");
 }
 
 void setup() {
   setCpuFrequencyMhz(80);
   Serial.begin(9600);
+  sendEventLogToPi("System started.");
   dht.begin();
   preferences.begin("my-app", false);
 
@@ -314,11 +316,16 @@ void setup() {
   mainLedBaseFreq = preferences.getUInt("mainLedPwmFrequency", 5000);
   proximityManualState = preferences.getBool("proximityManualState", false);
   mainLedManualState = preferences.getBool("mainLedManualState", false);
+  debounceDelay = preferences.getUInt("debounceDelay", 50);
 
   pinMode(fanrelay, OUTPUT);
   pinMode(mainledsw, INPUT);
   pinMode(proximitysw, INPUT);
   pinMode(mainled, OUTPUT);
+  digitalWrite(fanrelay, LOW);
+  ledc_set_duty(ledcMode, ledcChannel_mainLed, 0);
+  ledc_update_duty(ledcMode, ledcChannel_mainLed);
+  sendEventLogToPi("Initial fan state: OFF, initial main LED state: OFF.");
 
   ledc_timer_config_t ledcTimerConfig_ldr = {
     .speed_mode = ledcMode,
@@ -368,17 +375,18 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
-  sendEventLogToPi("WiFi connected successfully. IP address: " + WiFi.localIP().toString());
+  sendEventLogToPi("WiFi connected. IP address: " + WiFi.localIP().toString() + ".");
 
   server.on("/on-perm", handleOn);
   server.on("/off", handleOff);
   server.on("/on-1h", handleOn1h);
-  server.on("/on-2h", handleOn2h);
+  server.on("/on-30m", handleOn30m);
   server.on("/set-temp-on", handleSetTempOn);
   server.on("/set-temp-off", handleSetTempOff);
   server.on("/set-brightness", handleSetBrightness);
   server.on("/set-light-threshold", handleSetLightThreshold);
   server.on("/set-main-led-brightness", handleSetMainLedBrightness);
+  server.on("/set-debounce-delay", handleSetDebounceDelay);
   server.on("/toggle-main-led", handleToggleMainLed);
   server.on("/toggle-master-switch", handleToggleMasterSwitch);
   server.on("/data", handleData);
@@ -395,20 +403,27 @@ void setup() {
     ledc_update_duty(ledcMode, ledcChannel_ldr);
   }
 
+  // Fix: Initialize lastProximityValue with the current state of the pin
+  lastProximityValue = digitalRead(proximitysw);
+  sendEventLogToPi("Initial master switch state: " + String(proximityManualState ? "ON" : "OFF"));
+  sendEventLogToPi("Initial main LED state: " + String(mainLedManualState ? "ON" : "OFF"));
+
+
   lastFanState = digitalRead(fanrelay);
   lastNightLedDuty = ledc_get_duty(ledcMode, ledcChannel_ldr);
-  sendEventLogToPi("System started. Initial fan state: " + String(lastFanState ? "ON" : "OFF") + ", initial main LED state: " + String(mainLedManualState ? "ON" : "OFF") + ".");
-  sendEventLogToPi("Initial master switch state: " + String(proximityManualState ? "ON" : "OFF"));
 }
 
 void loop() {
   server.handleClient();
   unsigned long currentMillis = millis();
 
-  // Handle sensor reading on a timed interval, but do NOT log here
+  // Handle sensor reading on a timed interval
   if (currentMillis - previousSensorMillis >= sensorInterval) {
     previousSensorMillis = currentMillis;
     readSensors();
+    if (isnan(lastHumidity) || isnan(lastTemperature)) {
+      sendEventLogToPi("Failed to read from DHT sensor!");
+    }
   }
 
   // Handle latching for proximitysw (master switch toggle)
@@ -416,7 +431,7 @@ void loop() {
   if (currentProximityValue == HIGH && lastProximityValue == LOW) {
     proximityManualState = !proximityManualState;
     preferences.putBool("proximityManualState", proximityManualState);
-    sendEventLogToPi("Master switch toggled to " + String(proximityManualState ? "ON" : "OFF") + ".");
+    sendEventLogToPi("Master switch state toggled to " + String(proximityManualState ? "ON" : "OFF") + ".");
   }
   lastProximityValue = currentProximityValue;
 
@@ -427,7 +442,7 @@ void loop() {
     if (currentTouchValue == HIGH && lastTouchValue == LOW) {
       mainLedManualState = !mainLedManualState;
       preferences.putBool("mainLedManualState", mainLedManualState);
-      sendEventLogToPi("Main LED switch toggled to " + String(mainLedManualState ? "ON" : "OFF") + ".");
+      sendEventLogToPi("Main LED state toggled to " + String(mainLedManualState ? "ON" : "OFF") + ".");
     }
     lastTouchValue = currentTouchValue;
 
@@ -444,21 +459,29 @@ void loop() {
     if (currentMode == MANUAL_ON_TIMED && currentMillis >= manualTimerEnd) {
       currentMode = AUTOMATED;
       digitalWrite(fanrelay, LOW);
-      sendEventLogToPi("Timed fan control ended. Fan is now OFF. Automated control resumed.");
+      sendEventLogToPi("Manual timer ended. Fan is now OFF.");
     }
     
     if (currentMode == AUTOMATED) {
-      if (lastTemperature >= tempOn) {
+      if (lastTemperature >= tempOn && digitalRead(fanrelay) == LOW) {
         digitalWrite(fanrelay, HIGH);
-      } else if (lastTemperature <= tempOff) {
+        sendEventLogToPi("Fan is now ON due to high temperature (" + String(lastTemperature, 1) + "C).");
+      } else if (lastTemperature <= tempOff && digitalRead(fanrelay) == HIGH) {
         digitalWrite(fanrelay, LOW);
+        sendEventLogToPi("Fan is now OFF due to low temperature (" + String(lastTemperature, 1) + "C).");
       }
     }
   } else {
     // If master switch is OFF, turn off both fan and main LED
-    digitalWrite(fanrelay, LOW);
-    ledc_set_duty(ledcMode, ledcChannel_mainLed, 0);
-    ledc_update_duty(ledcMode, ledcChannel_mainLed);
+    if (digitalRead(fanrelay) == HIGH) {
+      digitalWrite(fanrelay, LOW);
+      sendEventLogToPi("Master switch OFF. Fan is now OFF.");
+    }
+    if (ledc_get_duty(ledcMode, ledcChannel_mainLed) > 0) {
+      ledc_set_duty(ledcMode, ledcChannel_mainLed, 0);
+      ledc_update_duty(ledcMode, ledcChannel_mainLed);
+      sendEventLogToPi("Master switch OFF. Main LED is now OFF.");
+    }
   }
 
   // LDR and Brightness Control Logic
@@ -472,25 +495,18 @@ void loop() {
 
   if ((currentMillis - lastLDRChangeTime) >= debounceDelay) {
     if (currentLDRState) {
-      ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
+      if (ledc_get_duty(ledcMode, ledcChannel_ldr) != currentBrightnessDutyCycle) {
+        ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
+        ledc_update_duty(ledcMode, ledcChannel_ldr);
+        sendEventLogToPi("Night LED ON. Light level is " + String(currentLight) + ".");
+      }
     } else {
-      ledc_set_duty(ledcMode, ledcChannel_ldr, 0);
+      if (ledc_get_duty(ledcMode, ledcChannel_ldr) > 0) {
+        ledc_set_duty(ledcMode, ledcChannel_ldr, 0);
+        ledc_update_duty(ledcMode, ledcChannel_ldr);
+        sendEventLogToPi("Night LED OFF. Light level is " + String(currentLight) + ".");
+      }
     }
-    ledc_update_duty(ledcMode, ledcChannel_ldr);
   }
   lastLDRState = currentLDRState;
-
-  // Log fan status changes due to automation
-  bool currentFanState = digitalRead(fanrelay);
-  if (currentMode == AUTOMATED && currentFanState != lastFanState) {
-    sendEventLogToPi("Fan is now " + String(currentFanState ? "ON" : "OFF") + " based on temperature (" + String(lastTemperature, 1) + "C).");
-  }
-  lastFanState = currentFanState;
-
-  // Log Night LED brightness changes due to light sensor
-  int currentNightLedDuty = ledc_get_duty(ledcMode, ledcChannel_ldr);
-  if (currentNightLedDuty != lastNightLedDuty) {
-    sendEventLogToPi("Night LED brightness changed to " + String((int)(currentNightLedDuty / 2.55)) + "% based on light sensor.");
-  }
-  lastNightLedDuty = currentNightLedDuty;
 }
