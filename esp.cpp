@@ -26,17 +26,18 @@ int lastProximityValue = 0;
 int lightThreshold = 2350;
 
 const ledc_mode_t ledcMode = LEDC_LOW_SPEED_MODE;
-const ledc_timer_bit_t ledcResolution = LEDC_TIMER_8_BIT;
+const ledc_timer_bit_t ledcResolution = LEDC_TIMER_13_BIT;
+const int ledcMaxValue = 8191; // 2^13 - 1
 
 const ledc_timer_t ledcTimer_ldr = LEDC_TIMER_0;
 const ledc_channel_t ledcChannel_ldr = LEDC_CHANNEL_0;
 int ledcBaseFreq = 5000;
-int currentBrightnessDutyCycle = 128; // Default 50% brightness for LDR LED
+int currentBrightnessDutyCycle = 4096; // Default 50% brightness for LDR LED (8192 / 2)
 
 const ledc_timer_t ledcTimer_mainLed = LEDC_TIMER_1;
 const ledc_channel_t ledcChannel_mainLed = LEDC_CHANNEL_1;
 int mainLedBaseFreq = 5000;
-int mainLedBrightnessDutyCycle = 255; // Main LED full brightness
+int mainLedBrightnessDutyCycle = 8191; // Main LED full brightness
 
 const float tempOffset = -0.1;
 const float humidityOffset = 6.0;
@@ -181,15 +182,19 @@ void handleSetTempOff() {
 void handleSetBrightness() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
-    currentBrightnessDutyCycle = server.arg("value").toInt();
-    if (currentBrightnessDutyCycle > 255) currentBrightnessDutyCycle = 255;
-    if (currentBrightnessDutyCycle < 0) currentBrightnessDutyCycle = 0;
-    preferences.putUInt("brightness", currentBrightnessDutyCycle);
+    int requestedValue = server.arg("value").toInt();
+    if (requestedValue >= 0 && requestedValue <= ledcMaxValue) {
+      currentBrightnessDutyCycle = requestedValue;
+      preferences.putUInt("brightness", currentBrightnessDutyCycle);
 
-    ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
-    ledc_update_duty(ledcMode, ledcChannel_ldr);
-    sendEventLogToPi("Night LED brightness level set to " + String((int)(currentBrightnessDutyCycle / 2.55)) + "%.");
-    server.send(200, "text/plain", "LED brightness level set to " + String((int)(currentBrightnessDutyCycle / 2.55)) + "%..");
+      ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
+      ledc_update_duty(ledcMode, ledcChannel_ldr);
+      float percent = (float)currentBrightnessDutyCycle / ledcMaxValue * 100.0;
+      sendEventLogToPi("Night LED brightness level set to " + String(percent, 1) + "%.");
+      server.send(200, "text/plain", "LED brightness level set to " + String(percent, 1) + "%..");
+    } else {
+      server.send(400, "text/plain", "Invalid 'value' parameter. Must be between 0 and 8191.");
+    }
   } else {
     server.send(400, "text/plain", "Missing 'value' parameter.");
   }
@@ -216,12 +221,16 @@ void handleSetLightThreshold() {
 void handleSetMainLedBrightness() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   if (server.hasArg("value")) {
-    mainLedBrightnessDutyCycle = server.arg("value").toInt();
-    if (mainLedBrightnessDutyCycle > 255) mainLedBrightnessDutyCycle = 255;
-    if (mainLedBrightnessDutyCycle < 0) currentBrightnessDutyCycle = 0;
-    preferences.putUInt("mainLedBrightness", mainLedBrightnessDutyCycle);
-    sendEventLogToPi("Main LED brightness level set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%.");
-    server.send(200, "text/plain", "Main LED brightness level set to " + String((int)(mainLedBrightnessDutyCycle / 2.55)) + "%..");
+    int requestedValue = server.arg("value").toInt();
+    if (requestedValue >= 0 && requestedValue <= ledcMaxValue) {
+      mainLedBrightnessDutyCycle = requestedValue;
+      preferences.putUInt("mainLedBrightness", mainLedBrightnessDutyCycle);
+      float percent = (float)mainLedBrightnessDutyCycle / ledcMaxValue * 100.0;
+      sendEventLogToPi("Main LED brightness level set to " + String(percent, 1) + "%.");
+      server.send(200, "text/plain", "Main LED brightness level set to " + String(percent, 1) + "%..");
+    } else {
+      server.send(400, "text/plain", "Invalid 'value' parameter. Must be between 0 and 8191.");
+    }
   } else {
     server.send(400, "text/plain", "Missing 'value' parameter.");
   }
@@ -284,8 +293,10 @@ void handleData() {
   jsonDoc["master_switch_state"] = proximityManualState ? "on" : "off";
   jsonDoc["main_led_status"] = mainLedManualState ? "on" : "off";
   jsonDoc["control_mode"] = currentMode == AUTOMATED ? "Automated" : (currentMode == MANUAL_ON_PERMANENT ? "Manual (Permanent)" : "Manual (Timed)");
-  jsonDoc["ldr_brightness_level"] = (int)(currentBrightnessDutyCycle / 2.55);
-  jsonDoc["main_led_brightness_level"] = (int)(mainLedBrightnessDutyCycle / 2.55);
+  float nightLedPercent = (float)ledc_get_duty(ledcMode, ledcChannel_ldr) / ledcMaxValue * 100.0;
+  float mainLedPercent = (float)ledc_get_duty(ledcMode, ledcChannel_mainLed) / ledcMaxValue * 100.0;
+  jsonDoc["ldr_brightness_level"] = nightLedPercent;
+  jsonDoc["main_led_brightness_level"] = mainLedPercent;
   jsonDoc["temp_on_threshold"] = tempOn;
   jsonDoc["temp_off_threshold"] = tempOff;
   jsonDoc["light_threshold"] = lightThreshold;
@@ -309,9 +320,9 @@ void setup() {
 
   tempOn = preferences.getFloat("tempOn", 29.0);
   tempOff = preferences.getFloat("tempOff", 28.5);
-  currentBrightnessDutyCycle = preferences.getUInt("brightness", 128);
+  currentBrightnessDutyCycle = preferences.getUInt("brightness", 4096);
   lightThreshold = preferences.getUInt("lightThreshold", 2350);
-  mainLedBrightnessDutyCycle = preferences.getUInt("mainLedBrightness", 255);
+  mainLedBrightnessDutyCycle = preferences.getUInt("mainLedBrightness", 8191);
   ledcBaseFreq = preferences.getUInt("pwmFrequency", 5000);
   mainLedBaseFreq = preferences.getUInt("mainLedPwmFrequency", 5000);
   proximityManualState = preferences.getBool("proximityManualState", false);
@@ -323,10 +334,8 @@ void setup() {
   pinMode(proximitysw, INPUT);
   pinMode(mainled, OUTPUT);
   digitalWrite(fanrelay, LOW);
-  ledc_set_duty(ledcMode, ledcChannel_mainLed, 0);
-  ledc_update_duty(ledcMode, ledcChannel_mainLed);
-  sendEventLogToPi("Initial fan state: OFF, initial main LED state: OFF.");
 
+  // Initialize LEDC timers
   ledc_timer_config_t ledcTimerConfig_ldr = {
     .speed_mode = ledcMode,
     .duty_resolution = ledcResolution,
@@ -345,6 +354,7 @@ void setup() {
   };
   ledc_timer_config(&ledcTimerConfig_mainLed);
 
+  // Initialize LEDC channels
   ledc_channel_config_t ledcChannelConfig_ldr = {
     .gpio_num = nightled,
     .speed_mode = ledcMode,
@@ -367,8 +377,12 @@ void setup() {
   };
   ledc_channel_config(&ledcChannelConfig_mainLed);
 
+  // Now set the duties after initialization
+  ledc_set_duty(ledcMode, ledcChannel_mainLed, 0);
+  ledc_update_duty(ledcMode, ledcChannel_mainLed);
   ledc_set_duty(ledcMode, ledcChannel_ldr, currentBrightnessDutyCycle);
   ledc_update_duty(ledcMode, ledcChannel_ldr);
+  sendEventLogToPi("Initial fan state: OFF, initial main LED state: OFF.");
 
   WiFi.config(staticIP, gateway, subnet);
   WiFi.begin(ssid);
@@ -509,4 +523,7 @@ void loop() {
     }
   }
   lastLDRState = currentLDRState;
+  
+  // This delay() gives the watchdog timer a chance to be reset.
+  delay(1);
 }
