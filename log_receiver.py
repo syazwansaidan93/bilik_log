@@ -11,8 +11,10 @@ log_file_path = os.path.join('/home/wan/log/', 'sensor_log.txt')
 
 def format_malay_date(dt):
     """Formats a datetime object to a Malay date string."""
-    formatted_date = dt.strftime('%d/%m %H:%M:%S')
-    return formatted_date
+    # The format_malay_date function is no longer needed since the
+    # ESP32 will provide a single log message with a timestamp.
+    # However, to avoid a breaking change, we can leave this stub.
+    return dt.strftime('%d/%m %H:%M:%S')
 
 # HTML template for the web page with Tailwind CSS
 # This template includes a script to automatically refresh the log display
@@ -23,11 +25,10 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Sensor Log</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
         }
         .modal-overlay {
             position: fixed;
@@ -55,7 +56,7 @@ HTML_TEMPLATE = """
     <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-lg p-6 sm:p-8">
         <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-4 text-center">ESP32 Sensor Log</h1>
         <p class="text-sm sm:text-base text-gray-600 text-center mb-6">
-            Real-time log of sensor data from your ESP32-C3.
+            Real-time log of sensor data and events from your ESP32-C3.
         </p>
         <div class="flex flex-col items-center mb-4">
             <button id="clear-logs-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors duration-200">
@@ -157,36 +158,14 @@ HTML_TEMPLATE = """
 
 # Define a function to write the incoming log data to the file
 def write_log(data):
-    # Get the current timestamp and format it in Malay
-    timestamp = format_malay_date(datetime.datetime.now())
-    
-    # Check if 'event_message' key exists in the JSON data
-    event_message = data.get('event_message')
-    if event_message:
-        log_entry = f"[{timestamp}] - {event_message}\n"
-    else:
-        # Fallback for old logging format
-        log_entry = f"[{timestamp}] - Temp: {data.get('temperature')}°C, Humidity: {data.get('humidity')}%, Light: {data.get('light')}, Fan: {'ON' if data.get('fan_status') else 'OFF'}, Night LED: {data.get('night_led_brightness')}, Main LED: {data.get('main_led_brightness')}\n"
-
     try:
         # Ensure the directory exists before attempting to write the file
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
         
-        # Read existing logs, keep the last 19, and add the new entry
-        existing_lines = []
-        if os.path.exists(log_file_path):
-            with open(log_file_path, 'r') as f:
-                existing_lines = f.readlines()
-        
-        # Keep only the last 19 lines to prepare for a new entry
-        if len(existing_lines) >= 20:
-            existing_lines = existing_lines[len(existing_lines) - 19:]
-            
-        existing_lines.append(log_entry)
-        
-        # Rewrite the log file with the new content
-        with open(log_file_path, 'w') as f:
-            f.writelines(existing_lines)
+        # Open the log file in append mode and write the new entry
+        with open(log_file_path, 'a') as f:
+            log_entry = data.get('event_message', 'No event message provided.')
+            f.write(log_entry + '\n')
             
     except IOError as e:
         # Print an error message if the file cannot be written
@@ -232,3 +211,4 @@ def clear_logs():
 if __name__ == '__main__':
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     app.run(host='0.0.0.0', port=5001)
+
